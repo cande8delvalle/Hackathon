@@ -70,9 +70,9 @@ function banner(ctx) {
     const n = pendingCount();
     let txt;
     if (ctx === 'ai') txt = 'El asistente necesita conexión. Tus registros siguen guardándose en el teléfono.';
-    else if (ctx === 'chat') txt = 'Sin conexión. Tus mensajes se envían cuando haya señal';
-    else if (n > 0) txt = `Sin conexión. ${n} ${plural(n, 'registro se enviará', 'registros se enviarán')} cuando haya señal`;
-    else txt = 'Sin conexión. Tus registros se guardan en el teléfono y se envían cuando haya señal';
+    else if (ctx === 'chat') txt = 'Sin conexión. Tus mensajes se envían cuando haya conectividad';
+    else if (n > 0) txt = `Sin conexión. ${n} ${plural(n, 'registro se enviará', 'registros se enviarán')} cuando haya conectividad`;
+    else txt = 'Sin conexión. Tus registros se guardan en el teléfono y se envían cuando haya conectividad';
     return `<div class="banner banner-off" role="status">${ic('wifioff', 20)}<span>${txt}</span></div>`;
   }
   return '';
@@ -108,7 +108,7 @@ function loginHTML() {
       ? `<div class="msg-off" role="alert">${ic('wifioff', 20)}<span>Necesitás conexión para el primer ingreso.</span></div>` : '';
   return `<div class="login enter">
     <aside class="login-panel">${logo(48, true, true)}
-      <h1 class="login-claim">Registrá, calculá y sincronizá, con o sin señal.</h1>
+      <h1 class="login-claim">Registrá, calculá y sincronizá, con o sin conectividad.</h1>
       <ul class="login-checks">${['Funciona sin conexión', 'Guarda en el dispositivo', 'Sincroniza solo'].map((t) => `<li><span class="ck">${ic('check', 18)}</span>${t}</li>`).join('')}</ul>
     </aside>
     <div class="login-form-wrap"><form class="login-form" data-form="login" novalidate>
@@ -119,7 +119,7 @@ function loginHTML() {
       <label class="check"><input type="checkbox" id="login-remember" data-model="login.remember" ${L.remember ? 'checked' : ''}><span class="box">${ic('check', 16)}</span><span>Mantener sesión en este dispositivo</span></label>
       ${err}
       <button class="btn btn-primary btn-block" type="submit" id="login-submit" ${L.loading ? 'disabled' : ''}>${L.loading ? `${ic('refresh', 20, 'spin')}Ingresando...` : 'Ingresar'}</button>
-      <p class="muted small center">Ingresás una vez con conexión. Después la app abre sin señal.</p>
+      <p class="muted small center">Ingresás una vez con conexión. Después la app abre sin conectividad.</p>
       <div class="quick"><p class="quick-t">Acceso rápido para la demo</p>
         <div class="quick-btns">${['agro', 'prod'].map((r) => `<button type="button" class="btn btn-secondary" data-act="quick-login" data-role="${r}" ${L.loading ? 'disabled' : ''}>${ROLE_LABEL[r]}</button>`).join('')}</div>
         <p class="muted small center">Usuarios: ana, productor · clave 1234</p></div>
@@ -160,7 +160,7 @@ function viewInicio() {
           <button class="action action-wide" data-act="open-consulta">${ic('message', 28)}<span>Consultas del productor</span>${unread ? `<span class="badge-new">${unread} ${plural(unread, 'consulta nueva', 'consultas nuevas')}</span>` : ''}</button>
         </div>
         <div class="kpis">
-          <div class="kpi card${pend ? ' kpi-warn' : ''}"><span class="kpi-l">Pendientes de enviar</span><span class="kpi-v" id="kpi-pend">${num(pend)}</span><span class="kpi-s">${pend ? ic('clock', 14) + ' Se envían con señal' : ic('check', 14) + ' Todo enviado'}</span></div>
+          <div class="kpi card${pend ? ' kpi-warn' : ''}"><span class="kpi-l">Pendientes de enviar</span><span class="kpi-v" id="kpi-pend">${num(pend)}</span><span class="kpi-s">${pend ? ic('clock', 14) + ' Se envían con conectividad' : ic('check', 14) + ' Todo enviado'}</span></div>
           <div class="kpi card"><span class="kpi-l">Ahorro estimado</span><span class="kpi-v">${num(ahorroAna())}<small> m³/ha</small></span><span class="kpi-s">${ic('trend', 14)} Este mes</span></div>
         </div>
         ${avisosCard(topAvisos(2), true)}

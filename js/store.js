@@ -145,7 +145,7 @@ function pumpFire() {
   schedulePump();
 }
 
-// Al volver la señal con pendientes: barra de progreso de 2 s (lotes de hasta 50).
+// Al volver la conectividad con pendientes: barra de progreso de 2 s (lotes de hasta 50).
 function bulkSync() {
   clearTimeout(pumpTimer); pumpTimer = null;
   const items = [...pendingRecords(), ...pendingMsgs()];
