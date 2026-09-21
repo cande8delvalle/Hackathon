@@ -5,14 +5,14 @@ const KEY = 'campo360.v1';
 const AUTOR = 'Ana Martínez';
 
 function freshState(keep = {}) {
-  return { ver: 1, online: true, role: null, remember: true, firstLoginDone: false, ...seedData(), ...keep };
+  return { ver: 2, online: true, role: null, remember: true, firstLoginDone: false, ...seedData(), ...keep };
 }
 function loadState() {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const p = JSON.parse(raw);
-      if (p && p.ver === 1 && Array.isArray(p.records) && Array.isArray(p.messages)) return p;
+      if (p && p.ver === 2 && Array.isArray(p.records) && Array.isArray(p.messages)) return p;
     }
   } catch (e) { /* sin storage: sigue en memoria */ }
   return freshState();
@@ -72,16 +72,20 @@ function agroMessages(pid) {
   return S.messages.filter((m) => m.parcelId === pid && (m.from === 'agro' || m.entregado)).sort((a, b) => a.fecha - b.fecha);
 }
 function espMessages(pid) {
+  // Lo que ve el productor: sus consultas y las respuestas de la agrónoma ya sincronizadas.
   return S.messages.filter((m) => m.parcelId === pid && (m.from === 'prod' || m.estado === 'enviado')).sort((a, b) => a.fecha - b.fecha);
 }
-function espConvs() {
+const unreadForProd = (pid) => S.messages.filter((m) => m.from === 'agro' && m.estado === 'enviado' && !m.leidoProd && (!pid || m.parcelId === pid)).length;
+function prodConvItems() {
   return PARCELS.map((p) => {
     const msgs = espMessages(p.id);
-    const last = msgs[msgs.length - 1];
-    return { parcel: p, msgs, last, sinResponder: !!last && last.from === 'agro', nuevo: msgs.some((m) => m.nuevoEsp) };
-  }).filter((c) => c.msgs.length).sort((a, b) => (b.sinResponder - a.sinResponder) || (b.last.fecha - a.last.fecha));
+    return { p, last: msgs[msgs.length - 1], unread: unreadForProd(p.id) };
+  }).sort((a, b) => (b.last ? b.last.fecha : 0) - (a.last ? a.last.fecha : 0));
 }
-const sinResponderCount = () => espConvs().filter((c) => c.sinResponder).length;
+function prodDefaultConv() {
+  const u = prodConvItems().find((c) => c.unread);
+  return u ? u.p.id : 'lote3';
+}
 
 function topAvisos(n = 2) {
   const all = [];
@@ -108,8 +112,9 @@ function addMessage(m) {
   schedulePump();
   return msg;
 }
-function espReply(pid, texto) {
-  const msg = { id: uid('m'), parcelId: pid, from: 'prod', texto, foto: null, fecha: Date.now(), entregado: false, leido: false };
+// Consulta del productor: llega a la app de la agrónoma solo cuando ella tiene conexión.
+function espReply(pid, texto, foto) {
+  const msg = { id: uid('m'), parcelId: pid, from: 'prod', texto, foto: foto || null, fecha: Date.now(), entregado: false, leido: false };
   S.messages.push(msg);
   if (S.online) deliverReplies(false);
   save();
@@ -119,7 +124,7 @@ function espReply(pid, texto) {
 /* ---------- Sincronización ---------- */
 let pumpTimer = null;
 const markRecordSynced = (r) => { r.estado = 'sincronizado'; r.nuevoCoop = true; };
-const markMsgSynced = (m) => { m.estado = 'enviado'; m.nuevoEsp = true; };
+const markMsgSynced = (m) => { m.estado = 'enviado'; m.nuevoEsp = true; m.leidoProd = false; };
 
 // Con conexión, cada registro nuevo pasa de Pendiente a Sincronizado en ~1,5 s.
 function schedulePump() {
@@ -173,14 +178,14 @@ function cancelSync() {
   clearTimeout(pumpTimer); pumpTimer = null;
 }
 
-// Las respuestas del productor llegan a la app solo con conexión.
+// Las consultas del productor llegan a la app de la agrónoma solo con conexión.
 function deliverReplies(announce) {
   if (!S.online) return 0;
   const nuevas = S.messages.filter((m) => m.from === 'prod' && !m.entregado);
   nuevas.forEach((m) => { m.entregado = true; m.leido = false; });
   if (nuevas.length) {
     save();
-    if (announce) toast(`${nuevas.length} ${plural(nuevas.length, 'respuesta nueva', 'respuestas nuevas')} del productor`, 'info');
+    if (announce) toast(`${nuevas.length} ${plural(nuevas.length, 'consulta nueva', 'consultas nuevas')} del productor`, 'info');
   }
   return nuevas.length;
 }

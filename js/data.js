@@ -310,8 +310,8 @@ function seedData(now = Date.now()) {
 
   const t = now - 2 * D;
   const messages = [
-    { id: id('m'), parcelId: 'lote3', from: 'agro', texto: '¿Qué opinás de esta mancha en el lote 3?', foto: 'sample', fecha: t, estado: 'enviado', nuevoEsp: false },
-    { id: id('m'), parcelId: 'lote3', from: 'prod', texto: 'Puede ser falta de nutrientes o un problema de humedad. ¿Podés mandar una foto de la hoja de cerca?', foto: null, fecha: t + 3600e3, entregado: true, leido: true },
+    { id: id('m'), parcelId: 'lote3', from: 'prod', texto: '¿Qué opinás de esta mancha en el lote 3?', foto: 'sample', fecha: t, entregado: true, leido: true },
+    { id: id('m'), parcelId: 'lote3', from: 'agro', texto: 'Puede ser falta de nutrientes o un problema de humedad. ¿Podés mandar una foto de la hoja de cerca?', foto: null, fecha: t + 3600e3, estado: 'enviado', nuevoEsp: false, leidoProd: true },
   ];
 
   const S = {

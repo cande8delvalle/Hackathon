@@ -84,7 +84,7 @@ let readTimer = null, flagTimer = null;
 function afterRender() {
   const n = ui.route.name;
   const high = S.role === 'agro' ? ((n === 'consultas' && (ui.route.id || isWide())) || (n === 'asistente' && ui.ai.tab === 'chat'))
-    : S.role === 'prod' ? (ui.route.name === 'pconsultas' && !!ui.route.id) : false;
+    : S.role === 'prod' ? (ui.route.name === 'pconsultas' && (ui.route.id || isWide())) : false;
   document.body.dataset.fab = high ? 'high' : '';
   document.body.dataset.role = S.role || 'login';
 
@@ -95,6 +95,18 @@ function afterRender() {
         readTimer = null;
         if (S.role === 'agro' && ui.route.name === 'consultas') {
           S.messages.forEach((m) => { if (m.from === 'prod' && m.parcelId === id && m.entregado) m.leido = true; });
+          save(); render();
+        }
+      }, 2500);
+    }
+  }
+  if (S.role === 'prod' && n === 'pconsultas') {
+    const pid = prodConvId();
+    if (pid && unreadForProd(pid) > 0 && !readTimer) {
+      readTimer = setTimeout(() => {
+        readTimer = null;
+        if (S.role === 'prod' && ui.route.name === 'pconsultas') {
+          S.messages.forEach((m) => { if (m.from === 'agro' && m.parcelId === pid) m.leidoProd = true; });
           save(); render();
         }
       }, 2500);
@@ -149,7 +161,7 @@ function switchView(role) {
   go(ROLE_DEFAULT[role]);
   if (role === 'agro' && S.online) {
     const u = unreadReplies();
-    if (u) toast(`Tenés ${u} ${plural(u, 'respuesta nueva', 'respuestas nuevas')} del productor`, 'info');
+    if (u) toast(`Tenés ${u} ${plural(u, 'consulta nueva', 'consultas nuevas')} del productor`, 'info');
   }
 }
 function restartApp() {
@@ -228,18 +240,16 @@ function sendChat() {
   render();
   const i = $('#chat-input'); if (i) i.focus();
 }
-function sendEsp() {
-  const t = $('#esp-input');
-  const text = (t ? t.value : ui.esp.draft).trim();
-  const convs = espConvs();
-  const id = ui.route.id || (isWide() && convs[0] ? convs[0].parcel.id : null);
-  if (!text || !id) return;
-  espReply(id, text);
-  ui.esp.draft = '';
+function sendProd() {
+  const id = prodConvId();
+  const text = ui.chat.draft.trim();
+  if (!id || (!text && !ui.chat.foto)) return;
+  espReply(id, text, ui.chat.foto);
+  ui.chat.draft = ''; ui.chat.foto = null; ui.chat.sheet = false;
   ui.scrollBottom = true;
-  toast(S.online ? 'Respuesta enviada a Ana' : 'Respuesta guardada. Llegará cuando la agrónoma tenga conexión', 'ok');
+  toast(S.online ? 'Consulta enviada a Ana' : 'Consulta enviada. Ana la recibe cuando tenga conexión', 'ok');
   render();
-  const i = $('#esp-input'); if (i) i.focus();
+  const inp = $('#chat-input'); if (inp) inp.focus();
 }
 function photoOf(kind, id) {
   const it = (kind === 'rec' ? S.records : S.messages).find((x) => x.id === id);
@@ -311,12 +321,11 @@ const ACT = {
   },
   'coop-clear': () => { ui.coop = { parcelId: 'todas', tipo: 'todos' }; render(); },
   'coop-ver': (el) => { ui.coop = { parcelId: el.dataset.pid, tipo: 'todos' }; go('resumen'); },
-  'esp-open': (el) => go('pconsultas', el.dataset.pid),
+  'esp-open': (el) => { if (ui.route.id !== el.dataset.pid) ui.chat = { draft: '', foto: null, sheet: false }; go('pconsultas', el.dataset.pid); },
   'esp-back': () => go('pconsultas'),
   'p-open-lote': (el) => { ui.parcelTab = 'obs'; go('plote', el.dataset.pid); },
   'p-nav-lotes': () => go('plotes'),
-  'p-open-chat': (el) => go('pconsultas', el.dataset.pid && espConvs().find((c) => c.parcel.id === el.dataset.pid) ? el.dataset.pid : null),
-  'esp-sugg': (el) => { ui.esp.draft = el.dataset.t; render(); const i = $('#esp-input'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } },
+  'p-open-chat': (el) => { ui.chat = { draft: '', foto: null, sheet: false }; go('pconsultas', el.dataset.pid || prodDefaultConv()); },
   'dp-toggle': () => { ui.panelOpen = !ui.panelOpen; ui.panelAnim = ui.panelOpen; renderPanel(); },
   'dp-airplane': () => {
     const goOff = S.online;
@@ -346,7 +355,6 @@ function setModel(path, value) {
 function updateNeeds() {
   const c = $('#chat-send'); if (c) c.disabled = !(ui.chat.draft.trim() || ui.chat.foto);
   const a = $('#ai-send'); if (a) a.disabled = !S.online || ui.ai.typing || !ui.ai.draft.trim();
-  const s = $('#esp-send'); if (s) s.disabled = !ui.esp.draft.trim();
 }
 function onHum(t) {
   let v = parseFloat(t.value);
@@ -396,7 +404,7 @@ document.addEventListener('submit', (e) => {
   else if (f === 'obs-save') saveObs();
   else if (f === 'chat-send') sendChat();
   else if (f === 'ai-send') aiSend(ui.ai.draft);
-  else if (f === 'esp-send') sendEsp();
+  else if (f === 'prod-send') sendProd();
 });
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;

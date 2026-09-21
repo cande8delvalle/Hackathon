@@ -84,7 +84,7 @@ function shellHTML(inner, opts = {}) {
   const badgeFor = (id) => {
     let n = 0;
     if (S.role === 'agro' && id === 'consultas') n = unreadReplies();
-    if (S.role === 'prod' && id === 'pconsultas') n = sinResponderCount();
+    if (S.role === 'prod' && id === 'pconsultas') n = unreadForProd();
     return n ? `<span class="nav-badge" aria-label="${n} ${plural(n, 'novedad', 'novedades')}">${n}</span>` : '';
   };
   const nav = items.map((it) => `<button class="nav-item${it.id === active ? ' active' : ''}" data-act="nav" data-to="${it.id}"${it.id === active ? ' aria-current="page"' : ''}>${ic(it.icon, 24)}<span class="nav-label">${it.label}</span>${badgeFor(it.id)}</button>`).join('');
@@ -157,7 +157,7 @@ function viewInicio() {
         <div class="actions">
           <button class="action action-primary" data-act="go-obs">${ic('plus', 28)}<span>Nueva observación</span></button>
           <button class="action" data-act="go-riego">${ic('calc', 28)}<span>Calcular riego</span></button>
-          <button class="action action-wide" data-act="open-consulta">${ic('message', 28)}<span>Consultar al productor</span>${unread ? `<span class="badge-new">${unread} ${plural(unread, 'respuesta nueva', 'respuestas nuevas')}</span>` : ''}</button>
+          <button class="action action-wide" data-act="open-consulta">${ic('message', 28)}<span>Consultas del productor</span>${unread ? `<span class="badge-new">${unread} ${plural(unread, 'consulta nueva', 'consultas nuevas')}</span>` : ''}</button>
         </div>
         <div class="kpis">
           <div class="kpi card${pend ? ' kpi-warn' : ''}"><span class="kpi-l">Pendientes de enviar</span><span class="kpi-v" id="kpi-pend">${num(pend)}</span><span class="kpi-s">${pend ? ic('clock', 14) + ' Se envían con señal' : ic('check', 14) + ' Todo enviado'}</span></div>
@@ -316,11 +316,11 @@ function agroMsgHTML(m) {
   return `<div class="msg ${mine ? 'me' : 'them'}"><div class="bubble">${m.foto ? thumb('msg', m.id, m.foto) : ''}${m.texto ? `<p>${esc(m.texto)}</p>` : ''}</div>
     <div class="msg-meta">${mine ? estadoChip(m.estado) : ''}<span class="time">${hhmm(m.fecha)}</span></div></div>`;
 }
-function composerHTML(model, placeholder, opts) {
+function composerHTML(model, placeholder, opts, form = 'chat-send') {
   const { foto, sheet } = opts;
   return `<div class="composer-wrap">${foto ? `<div class="photo-prev composer-prev"><img src="${photoSrc(foto)}" alt="Miniatura"><span class="grow muted small">Foto adjunta</span><button type="button" class="icon-btn" data-act="chat-foto-clear" aria-label="Quitar foto">${ic('x', 22)}</button></div>` : ''}
     ${sheet ? `<div class="photo-menu" role="menu"><button class="pop-item" role="menuitem" data-act="chat-foto-pick">${ic('image', 20)}Elegir de la galería</button><button class="pop-item" role="menuitem" data-act="chat-foto-demo">${ic('leaf', 20)}Usar foto de ejemplo</button></div>` : ''}
-    <form class="composer" data-form="chat-send"><button type="button" class="icon-btn icon-btn-b" data-act="chat-foto" aria-label="Adjuntar foto" aria-expanded="${!!sheet}">${ic('camera', 24)}</button>
+    <form class="composer" data-form="${form}"><button type="button" class="icon-btn icon-btn-b" data-act="chat-foto" aria-label="Adjuntar foto" aria-expanded="${!!sheet}">${ic('camera', 24)}</button>
       <input class="input" id="chat-input" data-model="${model}" value="${esc(ui.chat.draft)}" placeholder="${placeholder}" autocomplete="off">
       <button class="btn btn-primary icon-btn-b send" type="submit" id="chat-send" data-needs="chat" aria-label="Enviar" ${(ui.chat.draft.trim() || foto) ? '' : 'disabled'}>${ic('send', 22)}</button></form>
     <input type="file" id="file-chat" accept="image/*" hidden></div>`;
@@ -329,18 +329,18 @@ function viewConsultas() {
   const wide = isWide();
   const id = ui.route.id || (wide ? defaultConvId() : null);
   const items = convItems().map((c) => {
-    const prev = c.last ? (c.last.from === 'agro' ? 'Vos: ' : '') + (c.last.texto || 'Foto') : 'Todavía no hay mensajes';
-    return `<button class="conv-item${c.p.id === id ? ' active' : ''}" data-act="open-conv" data-pid="${c.p.id}"><span class="p-ic">${ic('message', 22)}</span><span class="p-t"><strong>${c.p.nombre} · Soja</strong><small>${esc(prev)}</small></span><span class="conv-r"><small>${c.last ? shortWhen(c.last.fecha) : ''}</small>${c.unread ? `<span class="badge-new">${c.unread} ${plural(c.unread, 'respuesta nueva', 'respuestas nuevas')}</span>` : (c.last && c.last.from === 'agro' && c.last.estado === 'pendiente' ? ic('clock', 16, 'pend-ic') : '')}</span></button>`;
+    const prev = c.last ? (c.last.from === 'agro' ? 'Vos: ' : 'Carlos: ') + (c.last.texto || 'Foto') : 'Todavía no hay consultas';
+    return `<button class="conv-item${c.p.id === id ? ' active' : ''}" data-act="open-conv" data-pid="${c.p.id}"><span class="p-ic">${ic('message', 22)}</span><span class="p-t"><strong>${c.p.nombre} · Soja</strong><small>${esc(prev)}</small></span><span class="conv-r"><small>${c.last ? shortWhen(c.last.fecha) : ''}</small>${c.unread ? `<span class="badge-new">${c.unread} ${plural(c.unread, 'consulta nueva', 'consultas nuevas')}</span>` : (c.last && c.last.from === 'prod' ? '<span class="chip chip-pend">Sin responder</span>' : (c.last && c.last.estado === 'pendiente' ? ic('clock', 16, 'pend-ic') : ''))}</span></button>`;
   }).join('');
   let panel;
   if (id) {
     const p = parcelById(id);
     const msgs = agroMessages(id);
     panel = `<div class="conv-head"><button class="icon-btn only-mobile" data-act="conv-back" aria-label="Volver a las consultas">${ic('left', 24)}</button><span class="avatar">CB</span><div class="grow"><strong>Carlos Benítez · ${p.nombre} · ${p.cultivo}</strong></div></div>
-      <div class="msgs" data-scroll="msgs">${msgs.length ? msgs.map(agroMsgHTML).join('') : emptyState('message', 'Todavía no escribiste en este lote', 'Contale al productor qué estás viendo. Podés sumar una foto.')}</div>
-      ${composerHTML('chat.draft', 'Escribí tu consulta', ui.chat)}`;
+      <div class="msgs" data-scroll="msgs">${msgs.length ? msgs.map(agroMsgHTML).join('') : emptyState('message', 'Todavía no hay consultas en este lote', 'Cuando el productor te escriba, la vas a ver acá. También podés escribirle vos, con foto.')}</div>
+      ${composerHTML('chat.draft', 'Escribí tu respuesta', ui.chat)}`;
   } else {
-    panel = emptyState('message', 'Elegí una conversación', 'Tus mensajes al productor aparecen acá.');
+    panel = emptyState('message', 'Elegí una conversación', 'Las consultas del productor aparecen acá.');
   }
   const inner = `<div class="consult-head"><h1>Consultas</h1>${selectorSeg('prod')}</div>${banner('chat')}
     <div class="chat-wrap${id ? ' conv-open' : ''}"><section class="conv-list card" aria-label="Conversaciones por parcela">${items}</section><section class="conv-panel card">${panel}</section></div>`;

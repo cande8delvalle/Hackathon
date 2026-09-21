@@ -16,7 +16,7 @@ function viewPInicio() {
   const activas = PARCELS.reduce((n, p) => n + pAlerts(p.id).filter((a) => SEV[a.sev].rank >= 2).length, 0);
   const pr = syncedRecords().filter((r) => r.tipo === 'presc');
   const ahorro = pr.reduce((a, r) => a + r.ahorro, 0);
-  const sinR = sinResponderCount();
+  const sinR = unreadForProd();
   const recent = syncedRecords().sort((a, b) => b.fecha - a.fecha).slice(0, 4);
   const rows = PARCELS.map((p) => {
     const rs = syncedRecords().filter((r) => r.parcelId === p.id);
@@ -36,7 +36,7 @@ function viewPInicio() {
     </div>
     <div class="two-col">
       <div class="col-stack">
-        <button class="action action-primary action-wide" data-act="p-open-chat">${ic('message', 28)}<span>Hablar con la agrónoma</span>${sinR ? `<span class="badge-new">${sinR} ${plural(sinR, 'consulta sin responder', 'consultas sin responder')}</span>` : ''}</button>
+        <button class="action action-primary action-wide" data-act="p-open-chat">${ic('message', 28)}<span>Hablar con la agrónoma</span>${sinR ? `<span class="badge-new">${sinR} ${plural(sinR, 'respuesta nueva', 'respuestas nuevas')}</span>` : ''}</button>
         ${avisosCard(topAvisos(3), true, { row: 'p-open-lote', all: 'p-nav-lotes' })}
         <section class="card"><div class="card-head"><h2>${ic('history', 20)}Últimos registros</h2></div>${recent.length ? `<div class="rec-list">${recent.map((r) => recCard(r, true, true)).join('')}</div>` : emptyState('history', 'Todavía no hay registros', 'Cuando la agrónoma sincronice observaciones, las vas a ver acá.')}</section>
       </div>
@@ -88,39 +88,38 @@ function viewPLote() {
   return shellHTML(inner);
 }
 
+// El productor manda las consultas (con foto); la agrónoma las responde.
 function espMsgHTML(m) {
   const mine = m.from === 'prod';
   const flash = m.nuevoEsp ? ' flash-b' : '';
+  const status = mine ? `${estadoChip('enviado')}${m.entregado ? '' : '<small class="muted">Ana la ve cuando tenga conexión</small>'}` : '';
   return `<div class="msg ${mine ? 'me' : 'them'}"><div class="bubble${flash}">${m.foto ? thumb('msg', m.id, m.foto, true) : ''}${m.texto ? `<p>${esc(m.texto)}</p>` : ''}</div>
-    <div class="msg-meta">${mine ? (m.entregado ? estadoChip('enviado') : `${estadoChip('pendiente')}<small class="muted">Llega cuando la agrónoma tenga conexión</small>`) : ''}<span class="time">${hhmm(m.fecha)}</span></div></div>`;
+    <div class="msg-meta">${status}<span class="time">${hhmm(m.fecha)}</span></div></div>`;
 }
+const prodConvId = () => ui.route.id || (isWide() ? prodDefaultConv() : null);
 function viewPConsultas() {
   const wide = isWide();
-  const convs = espConvs();
-  let id = ui.route.id;
-  if (id && !convs.find((c) => c.parcel.id === id)) id = null;
-  if (!id && wide && convs.length) id = convs[0].parcel.id;
-  const list = convs.length
-    ? convs.map((c) => `<button class="conv-item${c.parcel.id === id ? ' active' : ''}${c.nuevo ? ' flash' : ''}" data-act="esp-open" data-pid="${c.parcel.id}"><span class="p-ic">${ic('message', 22)}</span><span class="p-t"><strong>${c.parcel.nombre} · Soja</strong><small>${esc((c.last.from === 'agro' ? 'Ana: ' : 'Vos: ') + (c.last.texto || 'Foto'))}</small></span><span class="conv-r"><small>${shortWhen(c.last.fecha)}</small>${c.sinResponder ? '<span class="chip chip-pend">Sin responder</span>' : '<span class="chip chip-ok">Respondida</span>'}</span></button>`).join('')
-    : emptyState('message', 'Todavía no hay consultas', 'Cuando la agrónoma te escriba desde el campo, la conversación aparece acá.');
+  const id = prodConvId();
+  const list = prodConvItems().map((c) => {
+    const prev = c.last ? (c.last.from === 'prod' ? 'Vos: ' : 'Ana: ') + (c.last.texto || 'Foto') : 'Escribí tu primera consulta';
+    const tail = c.unread ? `<span class="badge-new">${c.unread} ${plural(c.unread, 'respuesta nueva', 'respuestas nuevas')}</span>`
+      : c.last ? (c.last.from === 'prod' ? '<span class="chip chip-pend">Esperando respuesta</span>' : '<span class="chip chip-ok">Respondida</span>') : '';
+    return `<button class="conv-item${c.p.id === id ? ' active' : ''}${c.last && c.last.nuevoEsp ? ' flash' : ''}" data-act="esp-open" data-pid="${c.p.id}"><span class="p-ic">${ic('message', 22)}</span><span class="p-t"><strong>${c.p.nombre} · Soja</strong><small>${esc(prev)}</small></span><span class="conv-r"><small>${c.last ? shortWhen(c.last.fecha) : ''}</small>${tail}</span></button>`;
+  }).join('');
   let panel;
   if (id) {
     const p = parcelById(id);
-    const c = convs.find((x) => x.parcel.id === id);
+    const msgs = espMessages(id);
     const f = parcelFacts(S, id, Date.now());
     const lp = f.lp;
-    const sugg = ['Gracias, ya lo vi. ¿Cuándo regamos?', '¿Es urgente o puede esperar unos días?', 'Avisame cuando tengas el resultado del análisis.'];
-    panel = `<div class="conv-head"><button class="icon-btn only-mobile" data-act="esp-back" aria-label="Volver a las consultas">${ic('left', 24)}</button><span class="avatar">AM</span><div class="grow"><strong>Ana Martínez · ${p.nombre} · ${p.cultivo}</strong><small class="muted">Agrónoma de campo</small></div>${c.sinResponder ? '<span class="chip chip-pend">Sin responder</span>' : ''}</div>
+    panel = `<div class="conv-head"><button class="icon-btn only-mobile" data-act="esp-back" aria-label="Volver a las consultas">${ic('left', 24)}</button><span class="avatar">AM</span><div class="grow"><strong>Ana Martínez · ${p.nombre} · ${p.cultivo}</strong><small class="muted">Agrónoma de campo</small></div></div>
       <div class="ctx-strip"><span>${ic('droplet', 14)} Humedad ${lp ? lp.humedad + '% (objetivo ' + lp.objetivo + '%)' : 'sin datos'}</span><span>${ic('bug', 14)} ${f.plaga.length} de Plaga en 7 días</span><span>${ic('file', 14)} ${f.lab ? 'Análisis: pH ' + num(f.lab.ph, 1) : 'Sin análisis cargado'}</span></div>
-      <div class="msgs" data-scroll="msgs">${c.msgs.map(espMsgHTML).join('')}</div>
-      <div class="reply-wrap"><div class="chips-row reply-sugg">${sugg.map((s) => `<button class="fchip fchip-s" data-act="esp-sugg" data-t="${esc(s)}">${esc(s)}</button>`).join('')}</div>
-      <form class="reply" data-form="esp-send"><textarea class="textarea" id="esp-input" data-model="esp.draft" placeholder="Escribí tu respuesta" rows="2">${esc(ui.esp.draft)}</textarea>
-        <button class="btn btn-primary" type="submit" id="esp-send" data-needs="esp" ${ui.esp.draft.trim() ? '' : 'disabled'}>${ic('send', 20)}Enviar</button></form></div>`;
+      <div class="msgs" data-scroll="msgs">${msgs.length ? msgs.map(espMsgHTML).join('') : emptyState('message', 'Todavía no hay consultas en este lote', 'Escribile a la agrónoma lo que ves en el lote. Podés sumar una foto.')}</div>
+      ${composerHTML('chat.draft', 'Escribí tu consulta', ui.chat, 'prod-send')}`;
   } else {
-    panel = emptyState('message', 'Elegí una conversación', 'Las consultas de la agrónoma aparecen a la izquierda.');
+    panel = emptyState('message', 'Elegí un lote', 'Tus consultas a la agrónoma aparecen acá.');
   }
-  const n = sinResponderCount();
-  const inner = `<div class="consult-head"><h1>Consultas</h1><span class="muted">${n} ${plural(n, 'consulta sin responder', 'consultas sin responder')}</span></div>
-    <div class="chat-wrap${id ? ' conv-open' : ''}"><section class="conv-list card" aria-label="Conversaciones">${list}</section><section class="conv-panel card">${panel}</section></div>`;
+  const inner = `<div class="consult-head"><h1>Consultas</h1><span class="muted">Escribile a la agrónoma, con fotos</span></div>
+    <div class="chat-wrap${id ? ' conv-open' : ''}"><section class="conv-list card" aria-label="Conversaciones por lote">${list}</section><section class="conv-panel card">${panel}</section></div>`;
   return shellHTML(inner, { fill: wide || !!id, chatOpen: !!id });
 }
